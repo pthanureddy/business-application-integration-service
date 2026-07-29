@@ -10,6 +10,16 @@ permissions:
   contents: read
 
 jobs:
+  validate-infrastructure:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Compile Azure Bicep template
+        run: az bicep build --file deploy/azure/main.bicep --outfile main.json
+
   build-test-package:
     runs-on: ubuntu-latest
 

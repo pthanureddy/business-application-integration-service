@@ -1,9 +1,11 @@
+using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Integration.Api.Adapters;
 using Integration.Api.Contracts;
 using Integration.Api.Domain;
+using Integration.Api.Observability;
 using Integration.Api.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -25,6 +27,7 @@ public sealed class IntegrationOrchestrator(
         object canonicalPayload,
         CancellationToken cancellationToken)
     {
+        using var submissionActivity = IntegrationTelemetry.StartSubmission(kind, sourceSystem);
         var canonicalJson = JsonSerializer.Serialize(canonicalPayload, JsonOptions);
         var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(canonicalJson)));
 
@@ -43,6 +46,8 @@ public sealed class IntegrationOrchestrator(
                 "Returning existing {IntegrationKind} job {JobId} for idempotency key",
                 kind,
                 existing.Id);
+            submissionActivity?.SetTag("integration.duplicate", true);
+            submissionActivity?.SetTag("integration.job_id", existing.Id);
             return new SubmissionResult(existing, Duplicate: true);
         }
 
@@ -57,6 +62,8 @@ public sealed class IntegrationOrchestrator(
             now);
         dbContext.IntegrationJobs.Add(job);
         await dbContext.SaveChangesAsync(cancellationToken);
+        submissionActivity?.SetTag("integration.duplicate", false);
+        submissionActivity?.SetTag("integration.job_id", job.Id);
 
         await DispatchAsync(job, cancellationToken);
         return new SubmissionResult(job, Duplicate: false);
@@ -84,6 +91,7 @@ public sealed class IntegrationOrchestrator(
 
     private async Task DispatchAsync(IntegrationJob job, CancellationToken cancellationToken)
     {
+        using var dispatchActivity = IntegrationTelemetry.StartDispatch(job);
         job.StartDispatch(timeProvider.GetUtcNow());
         await dbContext.SaveChangesAsync(cancellationToken);
 
@@ -96,6 +104,8 @@ public sealed class IntegrationOrchestrator(
                 cancellationToken);
             job.Complete(externalReference, timeProvider.GetUtcNow());
             await dbContext.SaveChangesAsync(cancellationToken);
+            dispatchActivity?.SetStatus(ActivityStatusCode.Ok);
+            dispatchActivity?.SetTag("integration.external_reference", externalReference);
             logger.LogInformation(
                 "Integration job {JobId} completed for {IntegrationKind} on attempt {AttemptCount}",
                 job.Id,
@@ -113,6 +123,7 @@ public sealed class IntegrationOrchestrator(
                 : "The outbound adapter failed before confirming delivery.";
             job.Fail(safeError, timeProvider.GetUtcNow());
             await dbContext.SaveChangesAsync(cancellationToken);
+            dispatchActivity?.SetStatus(ActivityStatusCode.Error, safeError);
             logger.LogWarning(
                 exception,
                 "Integration job {JobId} failed for {IntegrationKind} on attempt {AttemptCount}",
@@ -128,4 +139,3 @@ public sealed class IntegrationOrchestrator(
 }
 
 public sealed record SubmissionResult(IntegrationJob Job, bool Duplicate);
-

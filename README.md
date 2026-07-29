@@ -1,6 +1,6 @@
 # Business Application Integration Service
 
-A portfolio-grade ASP.NET Core service for reliable system-to-system integrations. It accepts logistics shipment and electronic invoice events, maps them to canonical JSON, records every delivery attempt in SQLite, and sends them to configurable downstream APIs. A separate SAP Business One Service Layer boundary demonstrates OData query construction and session-cookie authentication without claiming access to a live ERP.
+A portfolio-grade ASP.NET Core service for reliable system-to-system integrations. It accepts logistics shipment and electronic invoice events, maps them to canonical JSON, records every delivery attempt through EF Core, and sends them to configurable downstream APIs. SQLite supports local evaluation, while SQL Server is selectable for deployed environments. A separate SAP Business One Service Layer boundary demonstrates OData query construction and session-cookie authentication without claiming access to a live ERP.
 
 This project was built for an Integration Developer portfolio and focuses on the practical concerns that make small integrations maintainable: authentication, validation, idempotency, correlation IDs, structured errors, persistence, retry, logging, tests, and operational documentation.
 
@@ -9,9 +9,10 @@ This project was built for an Integration Developer portfolio and focuses on the
 - ASP.NET Core 8 Minimal APIs with API-key protection
 - Shipment and electronic invoice integration pipelines
 - Canonical JSON mapping at the system boundary
-- SQLite persistence through Entity Framework Core
+- SQLite and SQL Server persistence through Entity Framework Core
 - Idempotent submission with payload-conflict detection
 - Correlation ID propagation and structured logging
+- OpenTelemetry orchestration spans with optional Azure Monitor export
 - Failed-job state retention and controlled retry
 - Replaceable simulated and HTTP outbound adapters
 - Bearer-token support for downstream APIs
@@ -19,7 +20,8 @@ This project was built for an Integration Developer portfolio and focuses on the
 - Problem Details responses for validation and integration failures
 - Postman collection and local environment
 - Docker image, Docker Compose, and GitHub Actions CI
-- 20 automated tests with 88.0% line and 65.33% branch coverage
+- Azure Container Apps, Azure SQL, Log Analytics, and Application Insights Bicep
+- 23 automated tests with 88.67% line and 64.36% branch coverage
 
 ## Architecture
 
@@ -27,7 +29,7 @@ This project was built for an Integration Developer portfolio and focuses on the
 flowchart LR
     Client["Business application or Postman"] -->|API key + idempotency key| API["ASP.NET Core API"]
     API --> Map["Validation and canonical mapping"]
-    Map --> DB[("SQLite job store")]
+    Map --> DB[("EF Core: SQLite or SQL Server")]
     Map --> Adapter{"Configured adapter"}
     Adapter --> Sim["Local simulation"]
     Adapter --> HTTP["Logistics or e-invoice API"]
@@ -100,7 +102,10 @@ Environment variables use ASP.NET Core double-underscore notation.
 | Setting | Purpose | Default |
 | --- | --- | --- |
 | `IntegrationSecurity__ApiKey` | Required inbound API key | none |
-| `ConnectionStrings__IntegrationDatabase` | EF Core SQLite connection | `Data Source=integration.db` |
+| `DatabaseProvider` | Select `Sqlite` or `SqlServer` | `Sqlite` |
+| `ConnectionStrings__IntegrationDatabase` | EF Core connection string | `Data Source=integration.db` |
+| `APPLICATIONINSIGHTS_CONNECTION_STRING` | Enables Azure Monitor export for logs, metrics, and traces | empty |
+| `OTEL_SERVICE_NAME` | Overrides the OpenTelemetry service name | project default |
 | `Outbound__UseHttp` | Use real HTTP targets instead of simulation | `false` |
 | `Outbound__LogisticsUrl` | Shipment target URL | placeholder |
 | `Outbound__EInvoiceUrl` | E-invoice target URL | placeholder |
@@ -135,6 +140,9 @@ dotnet test BusinessApplicationIntegration.sln `
 ```
 
 The current suite covers request authentication, validation, canonical mappings, idempotent duplicates and conflicts, persistence, retry state rules, HTTP bearer/correlation headers, SAP session/OData behavior, and successful invoice/shipment flows.
+
+The Azure Bicep template is compiled in CI. See
+[deploy/azure](deploy/azure/README.md) for validation and deployment commands.
 
 ## Documentation
 

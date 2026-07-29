@@ -7,10 +7,11 @@ The service separates transport, orchestration, persistence, and external-system
 - **Endpoints** validate HTTP contracts and translate protocol details into application calls.
 - **Canonical mapper** isolates business-facing payloads from downstream transport schemas.
 - **Integration orchestrator** applies idempotency, persists state, dispatches work, and records the outcome.
-- **EF Core job store** provides an auditable local record with a unique integration-kind/idempotency-key constraint.
+- **EF Core job store** provides an auditable record with a unique integration-kind/idempotency-key constraint and selectable SQLite or SQL Server providers.
 - **Outbound adapter** switches between deterministic simulation and a real HTTP boundary.
 - **SAP client** switches between simulation and an HTTP/OData boundary for SAP Business One Service Layer.
 - **Middleware** applies correlation IDs and API-key authentication consistently.
+- **Observability** creates custom submission and dispatch spans; the Azure Monitor OpenTelemetry distribution can export application logs, metrics, HTTP dependencies, and distributed traces to Application Insights.
 - **Exception handler** returns Problem Details without exposing stack traces or secrets.
 
 ## Delivery sequence
@@ -19,7 +20,7 @@ The service separates transport, orchestration, persistence, and external-system
 sequenceDiagram
     participant C as Calling system
     participant A as Integration API
-    participant D as SQLite
+    participant D as EF Core database
     participant T as Target adapter
 
     C->>A: POST payload + API key + idempotency key
@@ -73,3 +74,22 @@ It deliberately does not simulate a full SAP installation or claim production va
 ### Security
 
 The implementation uses fixed-time comparison for the inbound API key, avoids credential logging, and returns generic operational errors. Production deployment should add TLS termination, network policy, secret rotation, rate limiting, audit retention, and organization-specific identity controls.
+
+### Database providers
+
+`DatabaseProvider=Sqlite` is the safe local default. Deployed environments can
+select `SqlServer`; the service then uses the SQL Server EF Core provider with
+bounded transient-failure retries. Unknown provider values fail at startup
+instead of silently selecting a database.
+
+### Azure observability
+
+The service registers an OpenTelemetry activity source for integration
+submission and downstream dispatch. When
+`APPLICATIONINSIGHTS_CONNECTION_STRING` is present, the Azure Monitor
+OpenTelemetry distribution exports traces, metrics, and structured application
+logs. Local execution remains self-contained when the setting is absent.
+
+The Bicep template provisions Azure Container Apps, Azure SQL Database, Log
+Analytics, and workspace-based Application Insights. It is validated as
+infrastructure code and is not evidence of a live production deployment.
