@@ -1,0 +1,329 @@
+openapi: 3.0.3
+info:
+  title: Business Application Integration API
+  version: 1.0.0
+  description: >-
+    Contract for shipment, electronic-invoice, job-status, retry, and SAP
+    Business One read boundaries implemented by the ASP.NET Core service.
+servers:
+  - url: https://integration-api.example.invalid
+    description: Environment-specific URL replaced by deployment configuration
+tags:
+  - name: Operations
+    description: Health and operational endpoints
+  - name: Logistics
+    description: Shipment integration commands
+  - name: Electronic invoices
+    description: Electronic-invoice integration commands
+  - name: Integration jobs
+    description: Delivery state and controlled retry
+  - name: SAP Business One
+    description: Read-only SAP Business One Service Layer boundary
+security:
+  - ApiKeyAuth: []
+paths:
+  /health:
+    get:
+      operationId: getHealth
+      tags: [Operations]
+      summary: Read liveness status
+      security: []
+      responses:
+        '200':
+          description: Service is running
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    type: string
+                    example: UP
+                  checkedAtUtc:
+                    type: string
+                    format: date-time
+  /api/v1/logistics/shipments:
+    post:
+      operationId: submitShipment
+      tags: [Logistics]
+      summary: Validate, persist, and dispatch a shipment update
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CorrelationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ShipmentRequest'
+      responses:
+        '200':
+          description: Identical idempotent request already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IntegrationJob'
+        '202':
+          description: New integration job accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IntegrationJob'
+        '400':
+          $ref: '#/components/responses/ValidationProblem'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '502':
+          $ref: '#/components/responses/DownstreamFailure'
+  /api/v1/e-invoices:
+    post:
+      operationId: submitElectronicInvoice
+      tags: [Electronic invoices]
+      summary: Validate, persist, and dispatch an electronic invoice
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CorrelationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ElectronicInvoiceRequest'
+      responses:
+        '200':
+          description: Identical idempotent request already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IntegrationJob'
+        '202':
+          description: New integration job accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IntegrationJob'
+        '400':
+          $ref: '#/components/responses/ValidationProblem'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '502':
+          $ref: '#/components/responses/DownstreamFailure'
+  /api/v1/jobs/{jobId}:
+    get:
+      operationId: getIntegrationJob
+      tags: [Integration jobs]
+      summary: Read integration state and delivery attempts
+      parameters:
+        - $ref: '#/components/parameters/JobId'
+      responses:
+        '200':
+          description: Integration job found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IntegrationJob'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/v1/jobs/{jobId}/retry:
+    post:
+      operationId: retryIntegrationJob
+      tags: [Integration jobs]
+      summary: Retry a retained failed delivery
+      parameters:
+        - $ref: '#/components/parameters/JobId'
+      responses:
+        '200':
+          description: Failed job was dispatched again
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IntegrationJob'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '502':
+          $ref: '#/components/responses/DownstreamFailure'
+  /api/v1/sap-business-one/sales-orders:
+    get:
+      operationId: getSapBusinessOneSalesOrders
+      tags: [SAP Business One]
+      summary: Read sales orders changed since a UTC instant
+      parameters:
+        - name: updatedSince
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: Matching sales orders
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SapSalesOrder'
+        '400':
+          $ref: '#/components/responses/ValidationProblem'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-Integration-Key
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 160
+    CorrelationId:
+      name: X-Correlation-ID
+      in: header
+      required: false
+      schema:
+        type: string
+        maxLength: 100
+    JobId:
+      name: jobId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  responses:
+    ValidationProblem:
+      description: Request validation failed
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+    Unauthorized:
+      description: API key is missing or invalid
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+    Conflict:
+      description: Idempotency key conflict or invalid retry state
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+    NotFound:
+      description: Integration job was not found
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+    DownstreamFailure:
+      description: Downstream delivery failed and the job was retained
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+  schemas:
+    ShipmentRequest:
+      type: object
+      required:
+        - sourceSystem
+        - shipmentId
+        - orderReference
+        - carrierCode
+        - status
+        - occurredAtUtc
+        - destinationCountry
+      properties:
+        sourceSystem: { type: string, minLength: 1, maxLength: 100 }
+        shipmentId: { type: string, minLength: 1, maxLength: 100 }
+        orderReference: { type: string, minLength: 1, maxLength: 100 }
+        carrierCode: { type: string, minLength: 1, maxLength: 40 }
+        trackingNumber: { type: string, nullable: true, maxLength: 120 }
+        status: { type: string, minLength: 1, maxLength: 40 }
+        occurredAtUtc: { type: string, format: date-time }
+        destinationCountry: { type: string, minLength: 2, maxLength: 2 }
+    ElectronicInvoiceRequest:
+      type: object
+      required:
+        - sourceSystem
+        - invoiceNumber
+        - customerCode
+        - currency
+        - issuedOn
+        - totalAmount
+        - lines
+      properties:
+        sourceSystem: { type: string, minLength: 1, maxLength: 100 }
+        invoiceNumber: { type: string, minLength: 1, maxLength: 100 }
+        customerCode: { type: string, minLength: 1, maxLength: 100 }
+        currency: { type: string, minLength: 3, maxLength: 3 }
+        issuedOn: { type: string, format: date }
+        totalAmount: { type: number, minimum: 0 }
+        lines:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/ElectronicInvoiceLine'
+    ElectronicInvoiceLine:
+      type: object
+      required: [itemCode, quantity, unitPrice, taxRate]
+      properties:
+        itemCode: { type: string, minLength: 1 }
+        quantity: { type: number, exclusiveMinimum: true, minimum: 0 }
+        unitPrice: { type: number, minimum: 0 }
+        taxRate: { type: number, minimum: 0, maximum: 100 }
+    IntegrationJob:
+      type: object
+      required:
+        - id
+        - kind
+        - status
+        - attemptCount
+        - correlationId
+        - createdAt
+        - updatedAt
+      properties:
+        id: { type: string, format: uuid }
+        kind: { type: string, enum: [LogisticsShipment, ElectronicInvoice] }
+        status: { type: string, enum: [Pending, Dispatching, Succeeded, Failed] }
+        attemptCount: { type: integer, minimum: 0 }
+        correlationId: { type: string }
+        externalReference: { type: string, nullable: true }
+        lastError: { type: string, nullable: true }
+        duplicate: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    SapSalesOrder:
+      type: object
+      required: [docEntry, docNum, cardCode, docTotal, currency, updatedAtUtc]
+      properties:
+        docEntry: { type: integer }
+        docNum: { type: integer }
+        cardCode: { type: string }
+        docTotal: { type: number }
+        currency: { type: string }
+        updatedAtUtc: { type: string, format: date-time }
+    ProblemDetails:
+      type: object
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        traceId: { type: string }

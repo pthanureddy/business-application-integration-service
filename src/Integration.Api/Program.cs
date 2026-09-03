@@ -2,9 +2,9 @@ using System.Text.Json.Serialization;
 using Integration.Api.Adapters;
 using Integration.Api.Configuration;
 using Integration.Api.Endpoints;
+using Integration.Api.Infrastructure;
 using Integration.Api.Middleware;
 using Integration.Api.Persistence;
-using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -24,10 +24,8 @@ builder.Services.Configure<OutboundOptions>(
 builder.Services.Configure<SapServiceLayerOptions>(
     builder.Configuration.GetSection(SapServiceLayerOptions.SectionName));
 
-var connectionString = builder.Configuration.GetConnectionString("IntegrationDatabase")
-    ?? "Data Source=integration.db";
-builder.Services.AddDbContext<IntegrationDbContext>(
-    options => options.UseSqlite(connectionString));
+builder.Services.AddIntegrationPersistence(builder.Configuration);
+builder.Services.AddIntegrationObservability(builder.Configuration);
 builder.Services.AddScoped<Integration.Api.Services.IntegrationOrchestrator>();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddHttpClient();

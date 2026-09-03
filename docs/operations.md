@@ -33,14 +33,29 @@ Completed jobs reject retry requests to reduce accidental duplicate delivery.
 - Back up the database volume before upgrades.
 - Retain structured logs and job records according to data-classification and privacy requirements.
 
+## Azure monitoring and tracing
+
+Set `APPLICATIONINSIGHTS_CONNECTION_STRING` at runtime to enable Azure Monitor
+export. Use `OTEL_SERVICE_NAME` when an environment-specific service identity is
+needed. Application Insights can then correlate inbound ASP.NET Core requests,
+HTTP dependencies, structured logs, and the custom `integration.submit` and
+`integration.dispatch` spans.
+
+For a failed delivery:
+
+1. Filter Application Insights by the correlation ID or integration job ID.
+2. Inspect the dispatch span and its downstream HTTP dependency.
+3. Compare the trace with the persisted attempt count and safe error.
+4. Correct the downstream issue before using the controlled retry endpoint.
+
 ## Production evolution
 
 Before high-volume production use:
 
 - replace `EnsureCreated` with versioned EF Core migrations;
-- adopt PostgreSQL or SQL Server for concurrent multi-instance deployment;
+- apply versioned migrations and capacity-test SQL Server for multi-instance deployment;
 - use a transactional outbox and queue-backed worker;
 - add retry backoff, jitter, dead-letter review, and replay authorization;
-- add OpenTelemetry traces/metrics and alerting;
+- define environment-specific Azure Monitor alerts and service-level objectives;
 - add rate limiting, workload identity, and a managed secrets store;
 - perform vendor contract tests and load/failure testing.
