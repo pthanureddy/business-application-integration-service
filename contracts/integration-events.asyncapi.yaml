@@ -1,0 +1,71 @@
+asyncapi: 3.1.0
+info:
+  title: Business Application Integration Events
+  version: 1.0.0
+  description: >-
+    Target event contract for the queue-backed migration described in the
+    integration strategy. The current application still dispatches
+    synchronously; publishing this event requires the outbox migration step.
+servers:
+  azureServiceBus:
+    host: '{namespace}.servicebus.windows.net'
+    protocol: amqp
+    description: Target Azure Service Bus namespace
+    variables:
+      namespace:
+        default: replace-for-environment
+channels:
+  integrationEvents:
+    address: integration-events
+    messages:
+      integrationAccepted:
+        $ref: '#/components/messages/IntegrationAccepted'
+operations:
+  publishIntegrationAccepted:
+    action: send
+    summary: Publish after an integration request and its outbox record commit together
+    channel:
+      $ref: '#/channels/integrationEvents'
+    messages:
+      - $ref: '#/channels/integrationEvents/messages/integrationAccepted'
+components:
+  messages:
+    IntegrationAccepted:
+      name: IntegrationAccepted
+      title: Integration job accepted
+      contentType: application/json
+      headers:
+        type: object
+        required: [messageId, correlationId, schemaVersion]
+        properties:
+          messageId:
+            type: string
+            format: uuid
+          correlationId:
+            type: string
+          schemaVersion:
+            type: string
+            const: '1.0'
+      payload:
+        $ref: '#/components/schemas/IntegrationAcceptedPayload'
+  schemas:
+    IntegrationAcceptedPayload:
+      type: object
+      additionalProperties: false
+      required:
+        - jobId
+        - integrationKind
+        - sourceSystem
+        - acceptedAtUtc
+      properties:
+        jobId:
+          type: string
+          format: uuid
+        integrationKind:
+          type: string
+          enum: [Shipment, ElectronicInvoice]
+        sourceSystem:
+          type: string
+        acceptedAtUtc:
+          type: string
+          format: date-time

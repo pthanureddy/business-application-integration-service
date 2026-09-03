@@ -11,6 +11,9 @@
 - Automated tests, Docker packaging, Postman assets, and CI configuration
 - OpenTelemetry instrumentation with conditional Azure Monitor export
 - Compiled Azure infrastructure template for Container Apps, SQL, Log Analytics, and Application Insights
+- Validated OpenAPI contract for the implemented HTTP surface
+- Validated target-state AsyncAPI contract and compiled APIM/Service Bus Bicep
+- Architecture decisions and a phased modernization roadmap with verification and rollback gates
 
 ## Not claimed
 
@@ -20,6 +23,8 @@
 - SAP session login/renewal or company-database selection
 - A live deployment to Azure or another cloud environment
 - Event-broker or transactional-outbox delivery guarantees
+- A completed BizTalk or other legacy-platform assessment or migration
+- Customer workshops, architecture governance, or a production technical roadmap
 
 ## Next steps with real stakeholders
 

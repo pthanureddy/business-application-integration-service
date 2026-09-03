@@ -93,3 +93,12 @@ logs. Local execution remains self-contained when the setting is absent.
 The Bicep template provisions Azure Container Apps, Azure SQL Database, Log
 Analytics, and workspace-based Application Insights. It is validated as
 infrastructure code and is not evidence of a live production deployment.
+
+### Integration-platform target
+
+The separate integration-platform template imports the implemented OpenAPI
+contract into Azure API Management and provisions an Azure Service Bus queue.
+The AsyncAPI contract, transactional outbox, and queue-backed worker are a
+designed migration path, not implemented runtime behavior. The current/target
+boundary and the cutover gates are defined in the integration strategy and
+modernization roadmap.
