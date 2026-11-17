@@ -101,6 +101,50 @@ public static class RequestValidation
         return errors;
     }
 
+    public static Dictionary<string, string[]> Validate(AccountsPayableInvoiceRequest request)
+    {
+        var errors = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase);
+        AddRequired(errors, nameof(request.SupplierNumber), request.SupplierNumber, 100);
+        AddRequired(errors, nameof(request.InvoiceNumber), request.InvoiceNumber, 100);
+
+        if (request.IssuedOn == default)
+        {
+            errors[nameof(request.IssuedOn)] = ["An invoice date is required."];
+        }
+
+        if (request.DueOn == default)
+        {
+            errors[nameof(request.DueOn)] = ["A due date is required."];
+        }
+        else if (request.IssuedOn != default && request.DueOn < request.IssuedOn)
+        {
+            errors[nameof(request.DueOn)] = ["Due date must not be before the invoice date."];
+        }
+
+        if (string.IsNullOrWhiteSpace(request.Currency) || request.Currency.Trim().Length != 3)
+        {
+            errors[nameof(request.Currency)] = ["Use a three-letter ISO currency code."];
+        }
+
+        if (request.GrossAmount <= 0)
+        {
+            errors[nameof(request.GrossAmount)] = ["Gross amount must be greater than zero."];
+        }
+
+        AddOptionalMaximum(errors, nameof(request.PurchaseOrderReference), request.PurchaseOrderReference, 100);
+        AddOptionalMaximum(errors, nameof(request.RequestedAccount), request.RequestedAccount, 40);
+        AddOptionalMaximum(errors, nameof(request.RequestedCostCenter), request.RequestedCostCenter, 40);
+        return errors;
+    }
+
+    public static Dictionary<string, string[]> Validate(AccountsPayableDecisionRequest request)
+    {
+        var errors = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase);
+        AddRequired(errors, nameof(request.ApproverRole), request.ApproverRole, 100);
+        AddRequired(errors, nameof(request.DecisionBy), request.DecisionBy, 160);
+        return errors;
+    }
+
     private static void AddRequired(
         IDictionary<string, string[]> errors,
         string field,
@@ -112,6 +156,18 @@ public static class RequestValidation
             errors[field] = ["A value is required."];
         }
         else if (value.Trim().Length > maximumLength)
+        {
+            errors[field] = [$"Value must not exceed {maximumLength} characters."];
+        }
+    }
+
+    private static void AddOptionalMaximum(
+        IDictionary<string, string[]> errors,
+        string field,
+        string? value,
+        int maximumLength)
+    {
+        if (value is { Length: > 0 } && value.Trim().Length > maximumLength)
         {
             errors[field] = [$"Value must not exceed {maximumLength} characters."];
         }

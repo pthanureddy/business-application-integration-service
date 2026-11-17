@@ -19,6 +19,12 @@ public static class IntegrationEndpoints
         api.MapGet("/jobs/{jobId:guid}", GetJobAsync);
         api.MapPost("/jobs/{jobId:guid}/retry", RetryJobAsync);
         api.MapGet("/sap-business-one/sales-orders", GetSapSalesOrdersAsync);
+        api.MapPost("/accounts-payable/invoices", SubmitAccountsPayableInvoiceAsync);
+        api.MapGet("/accounts-payable/invoices/{invoiceId:guid}", GetAccountsPayableInvoiceAsync);
+        api.MapGet("/accounts-payable/exceptions", GetAccountsPayableExceptionsAsync);
+        api.MapPost("/accounts-payable/invoices/{invoiceId:guid}/approve", ApproveAccountsPayableInvoiceAsync);
+        api.MapPost("/accounts-payable/invoices/{invoiceId:guid}/reject", RejectAccountsPayableInvoiceAsync);
+        api.MapGet("/accounts-payable/analytics", GetAccountsPayableAnalyticsAsync);
 
         return endpoints;
     }
@@ -119,6 +125,79 @@ public static class IntegrationEndpoints
 
         var orders = await client.FetchUpdatedAsync(updatedSince.Value.ToUniversalTime(), cancellationToken);
         return Results.Ok(orders);
+    }
+
+    private static async Task<IResult> SubmitAccountsPayableInvoiceAsync(
+        AccountsPayableInvoiceRequest request,
+        AccountsPayableWorkflowService workflow,
+        CancellationToken cancellationToken)
+    {
+        var errors = RequestValidation.Validate(request);
+        if (errors.Count > 0)
+        {
+            return Results.ValidationProblem(errors);
+        }
+
+        var invoice = await workflow.SubmitAsync(request, cancellationToken);
+        return Results.Created(
+            $"/api/v1/accounts-payable/invoices/{invoice.Id}",
+            AccountsPayableInvoiceResponse.From(invoice));
+    }
+
+    private static async Task<IResult> GetAccountsPayableInvoiceAsync(
+        Guid invoiceId,
+        AccountsPayableWorkflowService workflow,
+        CancellationToken cancellationToken)
+    {
+        var invoice = await workflow.GetAsync(invoiceId, cancellationToken);
+        return Results.Ok(AccountsPayableInvoiceResponse.From(invoice));
+    }
+
+    private static async Task<IResult> GetAccountsPayableExceptionsAsync(
+        AccountsPayableWorkflowService workflow,
+        CancellationToken cancellationToken)
+    {
+        var invoices = await workflow.GetExceptionsAsync(cancellationToken);
+        return Results.Ok(invoices.Select(AccountsPayableInvoiceResponse.From));
+    }
+
+    private static async Task<IResult> ApproveAccountsPayableInvoiceAsync(
+        Guid invoiceId,
+        AccountsPayableDecisionRequest request,
+        AccountsPayableWorkflowService workflow,
+        CancellationToken cancellationToken)
+    {
+        var errors = RequestValidation.Validate(request);
+        if (errors.Count > 0)
+        {
+            return Results.ValidationProblem(errors);
+        }
+
+        var invoice = await workflow.ApproveAsync(invoiceId, request, cancellationToken);
+        return Results.Ok(AccountsPayableInvoiceResponse.From(invoice));
+    }
+
+    private static async Task<IResult> RejectAccountsPayableInvoiceAsync(
+        Guid invoiceId,
+        AccountsPayableDecisionRequest request,
+        AccountsPayableWorkflowService workflow,
+        CancellationToken cancellationToken)
+    {
+        var errors = RequestValidation.Validate(request);
+        if (errors.Count > 0)
+        {
+            return Results.ValidationProblem(errors);
+        }
+
+        var invoice = await workflow.RejectAsync(invoiceId, request, cancellationToken);
+        return Results.Ok(AccountsPayableInvoiceResponse.From(invoice));
+    }
+
+    private static async Task<IResult> GetAccountsPayableAnalyticsAsync(
+        AccountsPayableWorkflowService workflow,
+        CancellationToken cancellationToken)
+    {
+        return Results.Ok(await workflow.GetAnalyticsAsync(cancellationToken));
     }
 
     private static bool TryGetIdempotencyKey(

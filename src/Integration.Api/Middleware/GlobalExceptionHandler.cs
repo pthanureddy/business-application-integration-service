@@ -19,6 +19,10 @@ public sealed class GlobalExceptionHandler(ILogger<GlobalExceptionHandler> logge
             IntegrationJobStateException => (StatusCodes.Status409Conflict, "Invalid integration job state"),
             ExternalIntegrationException => (StatusCodes.Status502BadGateway, "Outbound integration failed"),
             IntegrationAdapterException => (StatusCodes.Status502BadGateway, "Business application request failed"),
+            AccountsPayableInvoiceNotFoundException => (StatusCodes.Status404NotFound, "Accounts-payable invoice not found"),
+            AccountsPayableDuplicateInvoiceException => (StatusCodes.Status409Conflict, "Duplicate supplier invoice"),
+            AccountsPayableInvoiceStateException => (StatusCodes.Status409Conflict, "Invalid accounts-payable invoice state"),
+            AccountsPayableApprovalRoleException => (StatusCodes.Status409Conflict, "Approval role does not match routing rule"),
             _ => (StatusCodes.Status500InternalServerError, "Unexpected server error")
         };
 

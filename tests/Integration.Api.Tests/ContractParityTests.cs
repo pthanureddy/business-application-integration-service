@@ -12,6 +12,12 @@ public sealed class ContractParityTests
 
         Assert.Equal(
             [
+                "/api/v1/accounts-payable/analytics",
+                "/api/v1/accounts-payable/exceptions",
+                "/api/v1/accounts-payable/invoices",
+                "/api/v1/accounts-payable/invoices/{invoiceId}",
+                "/api/v1/accounts-payable/invoices/{invoiceId}/approve",
+                "/api/v1/accounts-payable/invoices/{invoiceId}/reject",
                 "/api/v1/e-invoices",
                 "/api/v1/jobs/{jobId}",
                 "/api/v1/jobs/{jobId}/retry",
@@ -73,6 +79,21 @@ public sealed class ContractParityTests
             "SapSalesOrder",
             ["cardCode", "currency", "docEntry", "docNum", "docTotal", "updatedAtUtc"],
             ["cardCode", "currency", "docEntry", "docNum", "docTotal", "updatedAtUtc"]);
+        AssertSchema(
+            schemas,
+            "AccountsPayableInvoiceRequest",
+            [
+                "currency",
+                "dueOn",
+                "grossAmount",
+                "invoiceNumber",
+                "issuedOn",
+                "purchaseOrderReference",
+                "requestedAccount",
+                "requestedCostCenter",
+                "supplierNumber"
+            ],
+            ["currency", "dueOn", "grossAmount", "invoiceNumber", "issuedOn", "supplierNumber"]);
     }
 
     [Fact]

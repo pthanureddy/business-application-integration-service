@@ -1,6 +1,6 @@
 # Business Application Integration Service
 
-A portfolio-grade ASP.NET Core service for reliable system-to-system integrations. It accepts logistics shipment and electronic invoice events, maps them to canonical JSON, records every delivery attempt through EF Core, and sends them to configurable downstream APIs. SQLite supports local evaluation, while SQL Server is selectable for deployed environments. A separate SAP Business One Service Layer boundary demonstrates OData query construction and session-cookie authentication without claiming access to a live ERP.
+A portfolio-grade ASP.NET Core service for reliable system-to-system integrations and synthetic finance-workflow automation. It accepts logistics shipment and electronic invoice events, maps them to canonical JSON, records every delivery attempt through EF Core, and sends them to configurable downstream APIs. It also models an accounts-payable flow with supplier master data, coding proposals, approval routing, exception handling, and workflow analytics. SQLite supports local evaluation, while SQL Server is selectable for deployed environments. A separate SAP Business One Service Layer boundary demonstrates OData query construction and session-cookie authentication without claiming access to a live ERP.
 
 This project was built as a reference implementation for integration development and architecture review. It combines working application boundaries with explicit target-state artifacts; the documentation distinguishes implemented behavior from migration work that remains.
 
@@ -8,6 +8,12 @@ This project was built as a reference implementation for integration development
 
 - ASP.NET Core 8 Minimal APIs with API-key protection
 - Shipment and electronic invoice integration pipelines
+- Synthetic accounts-payable invoice workflow with supplier master data
+- Duplicate supplier-invoice checks and due-date validation
+- Account and cost-centre coding proposals from supplier defaults
+- Amount-based approval routing and controlled approve/reject transitions
+- Manual-review queue for unknown suppliers, missing purchase orders, and coding deviations
+- Workflow analytics including exception counts and touchless-candidate rate
 - Canonical JSON mapping at the system boundary
 - SQLite and SQL Server persistence through Entity Framework Core
 - Idempotent submission with payload-conflict detection
@@ -25,7 +31,7 @@ This project was built as a reference implementation for integration development
 - API-first OpenAPI contract for the implemented HTTP surface
 - Target-state AsyncAPI contract plus compiled Azure API Management and Service Bus Bicep
 - Current-to-target integration strategy, ADRs, and phased modernization roadmap
-- 25 automated tests with 88.67% line and 64.36% branch coverage
+- 33 automated tests with 90.04% line and 69.08% branch coverage
 
 ## Architecture
 
@@ -39,6 +45,9 @@ flowchart LR
     Adapter --> HTTP["Logistics or e-invoice API"]
     API --> SAP["SAP B1 Service Layer client"]
     SAP --> OData["OData sales-order query"]
+    API --> AP["Accounts-payable workflow"]
+    AP --> Master["Synthetic supplier master"]
+    AP --> Review["Approval or exception queue"]
 ```
 
 The API starts in simulation mode, so it can be evaluated without third-party credentials. See [docs/architecture.md](docs/architecture.md) for the component boundaries and delivery behavior.
@@ -130,8 +139,14 @@ Never commit real credentials. Use a secrets manager or deployment-platform secr
 | `GET` | `/api/v1/jobs/{jobId}` | Inspect integration state |
 | `POST` | `/api/v1/jobs/{jobId}/retry` | Retry a failed job |
 | `GET` | `/api/v1/sap-business-one/sales-orders?updatedSince=...` | Read updated SAP sales orders |
+| `POST` | `/api/v1/accounts-payable/invoices` | Validate, code, and route a supplier invoice |
+| `GET` | `/api/v1/accounts-payable/invoices/{invoiceId}` | Inspect supplier-invoice workflow state |
+| `POST` | `/api/v1/accounts-payable/invoices/{invoiceId}/approve` | Approve through the amount-based role |
+| `POST` | `/api/v1/accounts-payable/invoices/{invoiceId}/reject` | Reject an invoice awaiting approval |
+| `GET` | `/api/v1/accounts-payable/exceptions` | Read the manual-review queue |
+| `GET` | `/api/v1/accounts-payable/analytics` | Read process counts and automation-candidate rate |
 
-The included [Postman collection](postman/Business-Application-Integration-Service.postman_collection.json) covers the supported flows.
+The included [Postman collection](postman/Business-Application-Integration-Service.postman_collection.json) covers the shipment and e-invoice integration flows; the AP workflow has executable PowerShell examples in its operator guide.
 
 ## Verification
 
@@ -143,7 +158,7 @@ dotnet test BusinessApplicationIntegration.sln `
   --collect:"XPlat Code Coverage"
 ```
 
-The current suite covers request authentication, validation, canonical mappings, idempotent duplicates and conflicts, persistence, retry state rules, HTTP bearer/correlation headers, SAP session/OData behavior, and successful invoice/shipment flows.
+The current suite covers request authentication, validation, canonical mappings, idempotent duplicates and conflicts, persistence, retry state rules, HTTP bearer/correlation headers, SAP session/OData behavior, invoice/shipment flows, supplier master lookups, AP duplicates, coding deviations, amount-based approvals, exception queues, and workflow analytics.
 
 The OpenAPI and AsyncAPI contracts are validated and both Azure Bicep templates
 are compiled in CI. See [deploy/azure](deploy/azure/README.md) for the distinct
@@ -158,7 +173,9 @@ application-hosting and integration-platform validation paths.
 - [Requirements traceability](docs/requirements.md)
 - [Operations runbook](docs/operations.md)
 - [Scope and limitations](docs/limitations.md)
+- [Accounts-payable workflow rules and operator runbook](docs/accounts-payable-workflow.md)
+- [Verification record](docs/verification.md)
 
 ## Scope
 
-This is a self-contained portfolio implementation, not a customer system and not connected to SAP, logistics providers, or e-invoicing vendors. The HTTP clients are genuine integration boundaries exercised with controlled test doubles. The APIM, Service Bus, and AsyncAPI artifacts define a compile-validated target; the current application does not publish to Service Bus and nothing in this repository is evidence of a live cloud migration or production deployment.
+This is a self-contained portfolio implementation, not a customer system and not connected to SAP, logistics providers, e-invoicing vendors, Rillion, or a finance department. Supplier records and invoices are synthetic. The HTTP clients are genuine integration boundaries exercised with controlled test doubles. The APIM, Service Bus, and AsyncAPI artifacts define a compile-validated target; the current application does not publish to Service Bus and nothing in this repository is evidence of a live cloud migration or production deployment.

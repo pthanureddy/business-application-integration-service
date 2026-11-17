@@ -10,6 +10,7 @@ The service separates transport, orchestration, persistence, and external-system
 - **EF Core job store** provides an auditable record with a unique integration-kind/idempotency-key constraint and selectable SQLite or SQL Server providers.
 - **Outbound adapter** switches between deterministic simulation and a real HTTP boundary.
 - **SAP client** switches between simulation and an HTTP/OData boundary for SAP Business One Service Layer.
+- **Accounts-payable workflow** checks synthetic supplier master data, proposes coding, applies exception and approval rules, and exposes current-state analytics.
 - **Middleware** applies correlation IDs and API-key authentication consistently.
 - **Observability** creates custom submission and dispatch spans; the Azure Monitor OpenTelemetry distribution can export application logs, metrics, HTTP dependencies, and distributed traces to Application Insights.
 - **Exception handler** returns Problem Details without exposing stack traces or secrets.
@@ -70,6 +71,12 @@ The SAP client demonstrates a narrow read capability:
 - Response-envelope mapping to an internal record
 
 It deliberately does not simulate a full SAP installation or claim production validation.
+
+### Accounts-payable workflow boundary
+
+The accounts-payable module is deliberately separate from outbound e-invoice delivery. It stores supplier invoices and supplier master records in the same EF Core database, but applies its own natural duplicate key, workflow status, approval route, and exception codes. This makes manual-review conditions explicit and queryable instead of hiding them in logs.
+
+The seeded supplier master and invoice examples are synthetic. No OCR, Rillion API, payment execution, tax determination, or ERP posting is implemented. See the accounts-payable workflow guide for rules, operating notes, and limitations.
 
 ### Security
 

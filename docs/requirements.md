@@ -17,9 +17,11 @@ This matrix connects common business-application integration requirements to con
 | Git and SDLC | Source control, pull-ready structure, automated build/test workflow | GitHub Actions |
 | API testing | Importable Postman collection and local environment | Manual runbook plus automated API tests |
 | Business data flows | Shipment and e-invoice canonicalization and dispatch | Mapping and successful-flow tests |
+| Supplier-invoice automation | Supplier master lookup, coding proposals, duplicate controls, exception queue, and amount-based approval routes | AP workflow API and domain tests |
+| Process analytics | Exception, approval, payment-ready, and touchless-candidate measures | Deterministic two-invoice analytics test |
 | SAP Business One/OData | Service Layer adapter, OData query builder, `B1SESSION` cookie | Focused adapter and query tests |
 | Docker/cloud-ready packaging | Multi-stage Dockerfile and Compose configuration | Image configuration plus CI Docker build |
 | Modernization planning | Current/target architecture, two ADRs, phased strangler roadmap, verification and rollback gates | Reviewable repository artifacts; no customer or production claim |
-| Maintainability | Interfaces, options, isolated adapters, focused docs, warnings-as-errors | 25 tests; 88.67% line and 64.36% branch coverage |
+| Maintainability | Interfaces, options, isolated adapters, focused docs, warnings-as-errors | 33 tests; 90.04% line and 69.08% branch coverage |
 
-The implementation does not claim access to a production ERP, vendor logistics API, or e-invoicing platform. Those dependencies are represented by configurable HTTP boundaries and controlled test doubles.
+The implementation does not claim access to a production ERP, vendor logistics API, e-invoicing platform, Rillion, or finance department. Those dependencies are represented by configurable HTTP boundaries, synthetic master data, and controlled test doubles.

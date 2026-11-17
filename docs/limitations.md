@@ -5,6 +5,7 @@
 - Local ASP.NET Core integration API
 - SQLite and SQL Server EF Core provider paths
 - Logistics shipment and electronic invoice mappings
+- Synthetic supplier master, accounts-payable coding proposals, exception routing, approvals, and analytics
 - Idempotency, correlation, validation, errors, and failed-job retry
 - Real HTTP client code exercised with deterministic in-memory HTTP handlers
 - SAP Business One Service Layer OData request and response mapping
@@ -25,6 +26,8 @@
 - Event-broker or transactional-outbox delivery guarantees
 - A completed BizTalk or other legacy-platform assessment or migration
 - Customer workshops, architecture governance, or a production technical roadmap
+- Accounting correctness, tax determination, bank payment, general-ledger posting, or Rillion integration
+- Operational experience in an accounts-payable or accounts-receivable department
 
 ## Next steps with real stakeholders
 

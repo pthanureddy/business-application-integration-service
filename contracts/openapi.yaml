@@ -3,8 +3,9 @@ info:
   title: Business Application Integration API
   version: 1.0.0
   description: >-
-    Contract for shipment, electronic-invoice, job-status, retry, and SAP
-    Business One read boundaries implemented by the ASP.NET Core service.
+    Contract for shipment, electronic-invoice, accounts-payable workflow,
+    job-status, retry, and SAP Business One read boundaries implemented by
+    the ASP.NET Core service.
 servers:
   - url: https://integration-api.example.invalid
     description: Environment-specific URL replaced by deployment configuration
@@ -15,6 +16,8 @@ tags:
     description: Shipment integration commands
   - name: Electronic invoices
     description: Electronic-invoice integration commands
+  - name: Accounts payable
+    description: Synthetic supplier-invoice workflow, exceptions, approvals, and analytics
   - name: Integration jobs
     description: Delivery state and controlled retry
   - name: SAP Business One
@@ -113,6 +116,134 @@ paths:
           $ref: '#/components/responses/Conflict'
         '502':
           $ref: '#/components/responses/DownstreamFailure'
+  /api/v1/accounts-payable/invoices:
+    post:
+      operationId: submitAccountsPayableInvoice
+      tags: [Accounts payable]
+      summary: Validate a supplier invoice and apply coding and approval rules
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccountsPayableInvoiceRequest'
+      responses:
+        '201':
+          description: Supplier invoice recorded and routed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountsPayableInvoice'
+        '400':
+          $ref: '#/components/responses/ValidationProblem'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/v1/accounts-payable/invoices/{invoiceId}:
+    get:
+      operationId: getAccountsPayableInvoice
+      tags: [Accounts payable]
+      summary: Read supplier-invoice workflow state
+      parameters:
+        - $ref: '#/components/parameters/InvoiceId'
+      responses:
+        '200':
+          description: Supplier invoice found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountsPayableInvoice'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/v1/accounts-payable/invoices/{invoiceId}/approve:
+    post:
+      operationId: approveAccountsPayableInvoice
+      tags: [Accounts payable]
+      summary: Approve an invoice when the role matches its amount-based route
+      parameters:
+        - $ref: '#/components/parameters/InvoiceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccountsPayableDecisionRequest'
+      responses:
+        '200':
+          description: Invoice is ready for payment
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountsPayableInvoice'
+        '400':
+          $ref: '#/components/responses/ValidationProblem'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/v1/accounts-payable/invoices/{invoiceId}/reject:
+    post:
+      operationId: rejectAccountsPayableInvoice
+      tags: [Accounts payable]
+      summary: Reject an invoice awaiting approval
+      parameters:
+        - $ref: '#/components/parameters/InvoiceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccountsPayableDecisionRequest'
+      responses:
+        '200':
+          description: Invoice rejected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountsPayableInvoice'
+        '400':
+          $ref: '#/components/responses/ValidationProblem'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/v1/accounts-payable/exceptions:
+    get:
+      operationId: getAccountsPayableExceptions
+      tags: [Accounts payable]
+      summary: List supplier invoices requiring manual review
+      responses:
+        '200':
+          description: Exception queue ordered by due date and supplier
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AccountsPayableInvoice'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/v1/accounts-payable/analytics:
+    get:
+      operationId: getAccountsPayableAnalytics
+      tags: [Accounts payable]
+      summary: Read workflow counts and touchless-candidate rate
+      responses:
+        '200':
+          description: Current accounts-payable workflow measures
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountsPayableAnalytics'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
   /api/v1/jobs/{jobId}:
     get:
       operationId: getIntegrationJob
@@ -207,6 +338,13 @@ components:
       schema:
         type: string
         format: uuid
+    InvoiceId:
+      name: invoiceId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
   responses:
     ValidationProblem:
       description: Request validation failed
@@ -288,6 +426,87 @@ components:
         quantity: { type: number, exclusiveMinimum: true, minimum: 0 }
         unitPrice: { type: number, minimum: 0 }
         taxRate: { type: number, minimum: 0, maximum: 100 }
+    AccountsPayableInvoiceRequest:
+      type: object
+      required:
+        - supplierNumber
+        - invoiceNumber
+        - issuedOn
+        - dueOn
+        - currency
+        - grossAmount
+      properties:
+        supplierNumber: { type: string, minLength: 1, maxLength: 100 }
+        invoiceNumber: { type: string, minLength: 1, maxLength: 100 }
+        issuedOn: { type: string, format: date }
+        dueOn: { type: string, format: date }
+        currency: { type: string, minLength: 3, maxLength: 3 }
+        grossAmount: { type: number, exclusiveMinimum: true, minimum: 0 }
+        purchaseOrderReference: { type: string, nullable: true, maxLength: 100 }
+        requestedAccount: { type: string, nullable: true, maxLength: 40 }
+        requestedCostCenter: { type: string, nullable: true, maxLength: 40 }
+    AccountsPayableDecisionRequest:
+      type: object
+      required: [approverRole, decisionBy]
+      properties:
+        approverRole: { type: string, minLength: 1, maxLength: 100 }
+        decisionBy: { type: string, minLength: 1, maxLength: 160 }
+    AccountsPayableInvoice:
+      type: object
+      required:
+        - id
+        - supplierNumber
+        - invoiceNumber
+        - issuedOn
+        - dueOn
+        - currency
+        - grossAmount
+        - requiredApprovalRole
+        - exceptionCodes
+        - touchlessCandidate
+        - status
+        - createdAt
+        - updatedAt
+      properties:
+        id: { type: string, format: uuid }
+        supplierNumber: { type: string }
+        invoiceNumber: { type: string }
+        issuedOn: { type: string, format: date }
+        dueOn: { type: string, format: date }
+        currency: { type: string }
+        grossAmount: { type: number }
+        purchaseOrderReference: { type: string, nullable: true }
+        requestedAccount: { type: string, nullable: true }
+        requestedCostCenter: { type: string, nullable: true }
+        suggestedAccount: { type: string, nullable: true }
+        suggestedCostCenter: { type: string, nullable: true }
+        requiredApprovalRole: { type: string }
+        decisionBy: { type: string, nullable: true }
+        exceptionCodes:
+          type: array
+          items: { type: string }
+        touchlessCandidate: { type: boolean }
+        status:
+          type: string
+          enum: [Exception, AwaitingApproval, ReadyForPayment, Rejected]
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    AccountsPayableAnalytics:
+      type: object
+      required:
+        - totalInvoices
+        - exceptionInvoices
+        - awaitingApprovalInvoices
+        - readyForPaymentInvoices
+        - touchlessCandidates
+        - touchlessCandidateRatePercent
+      properties:
+        totalInvoices: { type: integer, minimum: 0 }
+        exceptionInvoices: { type: integer, minimum: 0 }
+        awaitingApprovalInvoices: { type: integer, minimum: 0 }
+        readyForPaymentInvoices: { type: integer, minimum: 0 }
+        touchlessCandidates: { type: integer, minimum: 0 }
+        touchlessCandidateRatePercent: { type: number, minimum: 0, maximum: 100 }
     IntegrationJob:
       type: object
       required:

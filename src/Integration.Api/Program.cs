@@ -27,6 +27,7 @@ builder.Services.Configure<SapServiceLayerOptions>(
 builder.Services.AddIntegrationPersistence(builder.Configuration);
 builder.Services.AddIntegrationObservability(builder.Configuration);
 builder.Services.AddScoped<Integration.Api.Services.IntegrationOrchestrator>();
+builder.Services.AddScoped<Integration.Api.Services.AccountsPayableWorkflowService>();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddHttpClient();
 
@@ -65,6 +66,7 @@ using (var scope = app.Services.CreateScope())
 {
     var database = scope.ServiceProvider.GetRequiredService<IntegrationDbContext>();
     database.Database.EnsureCreated();
+    Integration.Api.Services.AccountsPayableWorkflowService.SeedSyntheticSupplierMaster(database);
 }
 
 app.Run();
